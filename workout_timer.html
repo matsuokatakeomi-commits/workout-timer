@@ -1,0 +1,731 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Workout Timer</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+      --border: #d1d5db;
+      --accent: #2563eb;
+      --accentText: #ffffff;
+      --track: #e5e7eb;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111827;
+        --panel: #1f2937;
+        --text: #f9fafb;
+        --muted: #9ca3af;
+        --border: #374151;
+        --accent: #3b82f6;
+        --accentText: #ffffff;
+        --track: #374151;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .wrap {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 28px 18px 40px;
+    }
+    h1 {
+      margin: 0 0 18px;
+      font-size: 28px;
+      line-height: 1.2;
+    }
+    .settings {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0,1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--muted);
+    }
+    input {
+      width: 100%;
+      margin-top: 6px;
+      padding: 11px 10px;
+      font-size: 18px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--panel);
+      color: var(--text);
+    }
+    .timer {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 26px 20px 22px;
+      text-align: center;
+    }
+    .phase {
+      font-size: 22px;
+      font-weight: 800;
+      margin-bottom: 6px;
+    }
+    .time {
+      font-size: clamp(72px, 15vw, 140px);
+      font-variant-numeric: tabular-nums;
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: -0.04em;
+      margin: 4px 0 18px;
+    }
+    .status {
+      display: flex;
+      justify-content: center;
+      gap: 26px;
+      color: var(--muted);
+      font-size: 15px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .status b { color: var(--text); }
+    .barTrack {
+      width: 100%;
+      height: 18px;
+      overflow: hidden;
+      background: var(--track);
+      border-radius: 999px;
+    }
+    .bar {
+      width: 0%;
+      height: 100%;
+      background: #22c55e;
+      transition: width .15s linear, background-color .15s linear;
+    }
+    .countdown {
+      min-height: 25px;
+      margin-top: 10px;
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--muted);
+    }
+    .buttons {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-top: 18px;
+    }
+    button {
+      min-width: 140px;
+      min-height: 48px;
+      padding: 11px 18px;
+      font-size: 16px;
+      font-weight: 800;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--text);
+      cursor: pointer;
+    }
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--accentText);
+    }
+    button:disabled {
+      opacity: .45;
+      cursor: default;
+    }
+    .summary {
+      text-align: center;
+      color: var(--muted);
+      font-size: 14px;
+      margin-top: 14px;
+      line-height: 1.6;
+    }
+    .note {
+      margin-top: 14px;
+      font-size: 12px;
+      color: var(--muted);
+      text-align: center;
+    }
+    .petStage {
+      height: 170px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      margin: 2px auto 10px;
+    }
+    /* 開始前・準備・完了・一時停止：元画像のまま静止 */
+    .pet {
+      width: 140px;
+      height: 140px;
+      flex: 0 0 auto;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+    /* 運動中・休憩中：コマ画像を切り替えて動かす */
+    .petSprite {
+      display: none;
+      flex: 0 0 auto;
+      background-repeat: no-repeat;
+      transform-origin: 50% 100%;
+    }
+    .petSprite.run   { animation: petBob .26s ease-in-out infinite alternate; }
+    .petSprite.sleep { animation: petBreathe 3.6s ease-in-out infinite; }
+    .petFallback {
+      display: none;
+      font-size: 56px;
+      line-height: 104px;
+    }
+    @keyframes petBob {
+      from { transform: translateY(0); }
+      to { transform: translateY(-5px); }
+    }
+    @keyframes petBreathe {
+      0%, 100% { transform: scale(1, 1); }
+      50% { transform: scale(1.02, 1.04); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .petSprite {
+        animation: none !important;
+      }
+    }
+    @media (max-width: 720px) {
+      .settings { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .settings label:last-child { grid-column: span 2; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <h1>Workout Timer</h1>
+
+    <section class="settings" aria-label="ワークアウト設定">
+      <label>準備（秒）
+        <input id="prepInput" type="number" min="0" max="600" value="5">
+      </label>
+      <label>運動（秒）
+        <input id="workInput" type="number" min="1" max="3600" value="7">
+      </label>
+      <label>ラウンド数
+        <input id="roundInput" type="number" min="1" max="999" value="10">
+      </label>
+      <label>休憩（秒）
+        <input id="restInput" type="number" min="0" max="3600" value="30">
+      </label>
+      <label>サイクル数
+        <input id="cycleInput" type="number" min="1" max="99" value="5">
+      </label>
+    </section>
+
+    <section class="timer">
+      <div id="phase" class="phase" aria-live="polite">開始前</div>
+      <div class="petStage">
+        <img id="pet" class="pet" src="pet.webp" alt="" draggable="false">
+        <div id="petSprite" class="petSprite" aria-hidden="true"></div>
+        <div id="petFallback" class="petFallback" aria-hidden="true">●</div>
+      </div>
+      <div id="time" class="time">5</div>
+
+      <div class="status">
+        <div>サイクル <b id="cycleDisplay">1 / 5</b></div>
+        <div>ラウンド <b id="roundDisplay">1 / 10</b></div>
+      </div>
+
+      <div class="barTrack" aria-hidden="true">
+        <div id="progress" class="bar"></div>
+      </div>
+
+      <div id="countdownHint" class="countdown"></div>
+    </section>
+
+    <div class="buttons">
+      <button id="startBtn" class="primary" type="button">▶ 開始</button>
+      <button id="pauseBtn" type="button" disabled>⏸ 一時停止</button>
+      <button id="resetBtn" type="button">↻ リセット</button>
+    </div>
+
+    <p id="message" class="summary">
+      準備5秒 → 運動7秒 × 10ラウンド → 休憩30秒 × 5サイクル
+    </p>
+    <p class="note">
+      残り3・2・1秒で「ピッ」、ラウンド終了で「ポーン」、サイクル終了で「ピー」、全完了で「ピピー」。音を出すため、開始時に一度ボタンを押してください。
+    </p>
+  </main>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+
+  const inputs = {
+    prep: $('prepInput'),
+    work: $('workInput'),
+    rounds: $('roundInput'),
+    rest: $('restInput'),
+    cycles: $('cycleInput')
+  };
+
+  const phaseEl = $('phase');
+  const pet = $('pet');
+  const petSprite = $('petSprite');
+  const petFallback = $('petFallback');
+  const timeEl = $('time');
+  const cycleEl = $('cycleDisplay');
+  const roundEl = $('roundDisplay');
+  const progressEl = $('progress');
+  const countdownHint = $('countdownHint');
+  const messageEl = $('message');
+  const startBtn = $('startBtn');
+  const pauseBtn = $('pauseBtn');
+  const resetBtn = $('resetBtn');
+
+  let cfg;
+  let phase = 'idle';
+  let cycle = 1;
+  let round = 1;
+  let duration = 0;
+  let remaining = 0;
+  let running = false;
+  let timer = null;
+  let endAt = 0;
+  let audioCtx = null;
+  let lastCountdownSecond = null;
+  let wakeLock = null;
+
+  function clampNumber(input, min, max) {
+    const n = Math.floor(Number(input.value));
+    const v = Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : min;
+    input.value = v;
+    return v;
+  }
+
+  function readConfig() {
+    return {
+      prep: clampNumber(inputs.prep, 0, 600),
+      work: clampNumber(inputs.work, 1, 3600),
+      rounds: clampNumber(inputs.rounds, 1, 999),
+      rest: clampNumber(inputs.rest, 0, 3600),
+      cycles: clampNumber(inputs.cycles, 1, 99)
+    };
+  }
+
+  function setInputsDisabled(disabled) {
+    Object.values(inputs).forEach(i => i.disabled = disabled);
+  }
+
+  function ensureAudio() {
+    try {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    } catch (_) {}
+  }
+
+  async function requestWakeLock() {
+    // 実行中は画面をスリープさせない（非対応ブラウザでは何もしない）。
+    try {
+      if (!('wakeLock' in navigator) || wakeLock) return;
+      const lock = await navigator.wakeLock.request('screen');
+      lock.addEventListener('release', () => {
+        if (wakeLock === lock) wakeLock = null;
+      });
+      if (running) {
+        wakeLock = lock;
+      } else {
+        lock.release();
+      }
+    } catch (_) {}
+  }
+
+  function releaseWakeLock() {
+    try {
+      if (wakeLock) wakeLock.release();
+    } catch (_) {}
+    wakeLock = null;
+  }
+
+  function tone(freq, length, volume = 0.2) {
+    try {
+      ensureAudio();
+      if (!audioCtx) return;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + length);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + length);
+    } catch (_) {}
+  }
+
+  function shortBeep() {
+    tone(1050, 0.11, 0.18);
+  }
+
+  function ponBeep() {
+    // 通常ラウンド終了用の「ポーン」。
+    tone(660, 0.38, 0.20);
+    setTimeout(() => tone(880, 0.55, 0.16), 70);
+  }
+
+  function longBeep() {
+    tone(1250, 0.65, 0.24);
+  }
+
+  function finishBeep() {
+    tone(1350, 0.55, 0.25);
+    setTimeout(() => tone(1650, 0.8, 0.24), 230);
+  }
+
+  function progressColor(ratioRemaining) {
+    if (ratioRemaining <= 0.15) return '#ef4444';
+    if (ratioRemaining <= 0.35) return '#f97316';
+    if (ratioRemaining <= 0.60) return '#eab308';
+    return '#22c55e';
+  }
+
+  // ペットの表示：
+  // 運動中は pet_workout.webp、休憩中は pet_sleep.webp のコマを順に切り替える。
+  // それ以外（開始前・準備・完了・一時停止）は pet.webp を静止表示する。
+  // frames は各コマの切り出し位置 [x, y, 幅, 高さ]（元画像のピクセル）。
+  // scale は表示倍率（元画像のピクセル → 画面のピクセル）。
+  const PET_ANIM = {
+    work: {
+      src: 'pet_workout.webp', sheetW: 2000, scale: 0.22, cls: 'run', speed: 800, order: [0, 1, 2],
+      frames: [[7, 6, 645, 622], [678, 74, 636, 556], [1373, 108, 618, 526]]
+    },
+    rest: {
+      src: 'pet_sleep.webp', sheetW: 2000, scale: 0.217, cls: 'sleep', speed: 1200, order: [0, 1, 2, 1],
+      frames: [[24, 141, 642, 423], [718, 22, 607, 559], [1443, 44, 534, 556]]
+    }
+  };
+  const reducedMotion = window.matchMedia &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let petAnim = null;
+  let petStep = 0;
+  let petFrameTimer = null;
+  let petImageOk = true;
+
+  // コマ画像を先に読み込んでおく。読み込めなかった状態は静止画のままにする。
+  Object.values(PET_ANIM).forEach(spec => {
+    const img = new Image();
+    img.onerror = () => {
+      spec.failed = true;
+      if (petAnim === spec) setPetAnim(null);
+    };
+    img.src = spec.src;
+  });
+
+  function renderPetFrame() {
+    const [x, y, w, h] = petAnim.frames[petAnim.order[petStep % petAnim.order.length]];
+    const k = petAnim.scale;
+    petSprite.style.width = `${w * k}px`;
+    petSprite.style.height = `${h * k}px`;
+    petSprite.style.backgroundPosition = `${-x * k}px ${-y * k}px`;
+  }
+
+  function setPetAnim(spec) {
+    if (spec && (spec.failed || !petImageOk)) spec = null;
+    if (spec === petAnim) return;
+
+    clearInterval(petFrameTimer);
+    petFrameTimer = null;
+    petAnim = spec;
+    petStep = 0;
+    petSprite.classList.remove('run', 'sleep');
+
+    if (!spec) {
+      petSprite.style.display = 'none';
+      if (petImageOk) pet.style.display = '';
+      return;
+    }
+
+    pet.style.display = 'none';
+    petSprite.style.display = 'block';
+    petSprite.style.backgroundImage = `url("${spec.src}")`;
+    petSprite.style.backgroundSize = `${spec.sheetW * spec.scale}px auto`;
+    petSprite.classList.add(spec.cls);
+    renderPetFrame();
+
+    if (reducedMotion) return;
+    petFrameTimer = setInterval(() => {
+      petStep++;
+      renderPetFrame();
+    }, spec.speed);
+  }
+
+  function updatePetState() {
+    setPetAnim(running ? (PET_ANIM[phase] || null) : null);
+  }
+
+  // 画像（pet.webp）が同じフォルダに無くても、タイマーはそのまま使える。
+  function showPetFallback() {
+    petImageOk = false;
+    setPetAnim(null);
+    pet.style.display = 'none';
+    petFallback.style.display = 'block';
+  }
+  pet.addEventListener('error', showPetFallback);
+  if (pet.complete && pet.naturalWidth === 0) showPetFallback();
+
+  function update() {
+    const names = {
+      idle: '開始前',
+      prep: '準備',
+      work: 'ワークアウト',
+      rest: '休憩',
+      done: '完了！'
+    };
+
+    const phaseName = names[phase] || '';
+    if (phaseEl.textContent !== phaseName) phaseEl.textContent = phaseName;
+    updatePetState();
+    const visibleSeconds = Math.max(0, Math.ceil(remaining));
+    if (timeEl.textContent !== String(visibleSeconds)) timeEl.textContent = visibleSeconds;
+
+    const cyclesTotal = cfg?.cycles ?? Number(inputs.cycles.value);
+    const roundsTotal = cfg?.rounds ?? Number(inputs.rounds.value);
+    cycleEl.textContent = `${cycle} / ${cyclesTotal}`;
+    roundEl.textContent = `${round} / ${roundsTotal}`;
+
+    const elapsedRatio = duration > 0
+      ? Math.min(1, Math.max(0, (duration - remaining) / duration))
+      : 0;
+
+    const remainingRatio = duration > 0
+      ? Math.min(1, Math.max(0, remaining / duration))
+      : 0;
+
+    progressEl.style.width = `${elapsedRatio * 100}%`;
+    progressEl.style.backgroundColor = progressColor(remainingRatio);
+
+    if (running && ['prep','work','rest'].includes(phase) &&
+        visibleSeconds <= 3 && visibleSeconds > 0) {
+      countdownHint.textContent = `あと ${visibleSeconds} 秒`;
+    } else {
+      countdownHint.textContent = '';
+    }
+  }
+
+  function setPhase(next, seconds, startAt = performance.now()) {
+    phase = next;
+    duration = Math.max(0, seconds);
+    endAt = startAt + duration * 1000;
+    remaining = Math.max(0, (endAt - performance.now()) / 1000);
+    lastCountdownSecond = null;
+    update();
+
+    if (duration === 0) {
+      // 0秒のフェーズは音を鳴らさずに飛ばす（直前の終了音と重ならないように）。
+      advance(startAt);
+    }
+  }
+
+  function advance(startAt) {
+    if (phase === 'prep') {
+      setPhase('work', cfg.work, startAt);
+      return;
+    }
+
+    if (phase === 'work') {
+      if (round < cfg.rounds) {
+        round++;
+        setPhase('work', cfg.work, startAt);
+      } else if (cycle < cfg.cycles) {
+        setPhase('rest', cfg.rest, startAt);
+      } else {
+        finish();
+      }
+      return;
+    }
+
+    if (phase === 'rest') {
+      cycle++;
+      round = 1;
+      setPhase('work', cfg.work, startAt);
+    }
+  }
+
+  function checkCountdownSound() {
+    if (!running || !['prep','work','rest'].includes(phase)) return;
+
+    const sec = Math.ceil(remaining);
+    if (sec <= 3 && sec >= 1 && sec !== lastCountdownSecond) {
+      lastCountdownSecond = sec;
+      shortBeep();
+    }
+  }
+
+  function tick() {
+    if (!running) return;
+
+    remaining = Math.max(0, (endAt - performance.now()) / 1000);
+    checkCountdownSound();
+    update();
+
+    if (remaining <= 0.01) {
+      // 終了音：
+      // 全サイクルの最終ラウンド終了時は完了音「ピピー」。
+      // 各サイクルの最終ラウンド終了時は長い「ピー」。
+      // それ以外の運動ラウンド終了時は「ポーン」。
+      // 準備・休憩の終了音は長い「ピー」。
+      if (phase === 'work') {
+        if (round === cfg.rounds && cycle === cfg.cycles) {
+          // 全サイクル完了
+          finishBeep();
+        } else if (round === cfg.rounds) {
+          // 各サイクルの最終ラウンド終了：長い「ピー」
+          longBeep();
+        } else {
+          // 各サイクルの最終ラウンド以外の終了：「ポーン」
+          ponBeep();
+        }
+      } else {
+        longBeep();
+      }
+      // 次のフェーズは前のフェーズの終了時刻から数え、判定の遅れを積み重ねない。
+      // ただしスリープ等で大きく遅れた場合は、今の時刻から数え直す。
+      const now = performance.now();
+      advance(now - endAt < LATE_LIMIT_MS ? endAt : now);
+    }
+  }
+
+  const LATE_LIMIT_MS = 2000;
+
+  function startInterval() {
+    clearInterval(timer);
+    timer = setInterval(tick, 40);
+  }
+
+  function start() {
+    if (phase !== 'idle' && phase !== 'done') return;
+
+    cfg = readConfig();
+    cycle = 1;
+    round = 1;
+    setInputsDisabled(true);
+    ensureAudio();
+
+    running = true;
+    requestWakeLock();
+    startBtn.textContent = '実行中';
+    startBtn.disabled = true;
+    pauseBtn.disabled = false;
+    messageEl.textContent = '残り3・2・1秒で短音、ラウンド終了でポーン、サイクル終了で長音が鳴ります。';
+
+    if (cfg.prep > 0) {
+      setPhase('prep', cfg.prep);
+    } else {
+      setPhase('work', cfg.work);
+    }
+
+    startInterval();
+  }
+
+  function pause() {
+    if (running) {
+      remaining = Math.max(0, (endAt - performance.now()) / 1000);
+      running = false;
+      clearInterval(timer);
+      releaseWakeLock();
+
+      pauseBtn.textContent = '▶ 再開';
+      startBtn.textContent = '一時停止中';
+      messageEl.textContent = '一時停止中';
+      update();
+      return;
+    }
+
+    if (phase !== 'idle' && phase !== 'done') {
+      running = true;
+      requestWakeLock();
+      endAt = performance.now() + remaining * 1000;
+
+      pauseBtn.textContent = '⏸ 一時停止';
+      startBtn.textContent = '実行中';
+      messageEl.textContent = '再開しました。';
+      startInterval();
+    }
+  }
+
+  function finish() {
+    running = false;
+    clearInterval(timer);
+    releaseWakeLock();
+
+    phase = 'done';
+    remaining = 0;
+    duration = 0;
+    countdownHint.textContent = '';
+
+    update();
+    progressEl.style.width = '100%';
+    progressEl.style.backgroundColor = '#22c55e';
+
+    startBtn.disabled = false;
+    startBtn.textContent = 'もう一度';
+    pauseBtn.disabled = true;
+    pauseBtn.textContent = '⏸ 一時停止';
+    setInputsDisabled(false);
+    messageEl.textContent = '全サイクル完了です。';
+  }
+
+  function reset() {
+    running = false;
+    clearInterval(timer);
+    releaseWakeLock();
+
+    cfg = readConfig();
+    phase = 'idle';
+    cycle = 1;
+    round = 1;
+    duration = cfg.prep;
+    remaining = cfg.prep;
+    lastCountdownSecond = null;
+
+    setInputsDisabled(false);
+    startBtn.disabled = false;
+    startBtn.textContent = '▶ 開始';
+    pauseBtn.disabled = true;
+    pauseBtn.textContent = '⏸ 一時停止';
+    countdownHint.textContent = '';
+
+    messageEl.textContent =
+      `設定：準備${cfg.prep}秒 → 運動${cfg.work}秒 × ${cfg.rounds}ラウンド → 休憩${cfg.rest}秒 × ${cfg.cycles}サイクル`;
+
+    update();
+  }
+
+  startBtn.addEventListener('click', start);
+  pauseBtn.addEventListener('click', pause);
+  resetBtn.addEventListener('click', reset);
+  Object.values(inputs).forEach(input => input.addEventListener('change', reset));
+  document.addEventListener('visibilitychange', () => {
+    // 画面に戻ったら、解除されたスリープ防止を取り直し、表示をすぐ更新する。
+    if (document.visibilityState === 'visible' && running) {
+      requestWakeLock();
+      tick();
+    }
+  });
+
+  reset();
+})();
+</script>
+</body>
+</html>
