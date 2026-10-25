@@ -188,6 +188,12 @@
       user-select: none;
       -webkit-user-drag: none;
     }
+    /* 完了：喜んでいる画像（汗やキラキラの分だけ少し大きめ） */
+    .petDone {
+      width: 170px;
+      height: 156px;
+      object-fit: contain;
+    }
     /* 運動中・休憩中：コマ画像を切り替えて動かす */
     .petSprite {
       display: none;
@@ -249,6 +255,7 @@
       <div id="phase" class="phase" aria-live="polite">開始前</div>
       <div class="petStage">
         <img id="pet" class="pet" src="pet.webp" alt="" draggable="false">
+        <img id="petDone" class="pet petDone" src="pet_done.webp" alt="" draggable="false" style="display: none">
         <div id="petSprite" class="petSprite" aria-hidden="true"></div>
         <div id="petFallback" class="petFallback" aria-hidden="true">●</div>
       </div>
@@ -257,6 +264,7 @@
       <div class="status">
         <div>サイクル <b id="cycleDisplay">1 / 5</b></div>
         <div>ラウンド <b id="roundDisplay">1 / 10</b></div>
+        <div>全体の残り <b id="totalRemain">7:55</b></div>
       </div>
 
       <div class="barTrack" aria-hidden="true">
@@ -295,10 +303,12 @@
   const phaseEl = $('phase');
   const pet = $('pet');
   const petSprite = $('petSprite');
+  const petDone = $('petDone');
   const petFallback = $('petFallback');
   const timeEl = $('time');
   const cycleEl = $('cycleDisplay');
   const roundEl = $('roundDisplay');
+  const totalRemainEl = $('totalRemain');
   const progressEl = $('progress');
   const countdownHint = $('countdownHint');
   const messageEl = $('message');
@@ -356,6 +366,32 @@
     if (h > 0) return `${h}時間${m}分${s}秒`;
     if (m > 0) return `${m}分${s}秒`;
     return `${s}秒`;
+  }
+
+  // ワークアウト全体の残り秒数（今のフェーズの残り + これから先のフェーズの合計）。
+  function totalRemainingSeconds() {
+    if (phase === 'idle' || !cfg) return totalSeconds(readConfig(false));
+    if (phase === 'done') return 0;
+
+    const now = Math.max(0, Math.ceil(remaining));
+    const cyclesLeft = cfg.cycles - cycle;  // 今のサイクルより後のサイクル数
+    const cycleSec = cfg.work * cfg.rounds;  // 1サイクル分の運動時間
+
+    if (phase === 'prep') {
+      return now + cycleSec * cfg.cycles + cfg.rest * (cfg.cycles - 1);
+    }
+    if (phase === 'work') {
+      return now + cfg.work * (cfg.rounds - round) + cyclesLeft * (cfg.rest + cycleSec);
+    }
+    // 休憩：この後のサイクル数だけ運動があり、休憩はその1回少ない分だけある。
+    return now + cyclesLeft * cycleSec + Math.max(0, cyclesLeft - 1) * cfg.rest;
+  }
+
+  function formatClock(sec) {
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor(sec % 3600 / 60);
+    const s = String(sec % 60).padStart(2, '0');
+    return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`;
   }
 
   function updateTotal() {
@@ -515,7 +551,22 @@
 
   function updatePetState() {
     setPetAnim(running ? (PET_ANIM[phase] || null) : null);
+
+    // 完了時は pet_done.webp を表示する（読み込めなければ pet.webp のまま）。
+    const showDone = phase === 'done' && petDoneOk;
+    petDone.style.display = showDone ? '' : 'none';
+    if (showDone) {
+      pet.style.display = 'none';
+    } else if (!petAnim && petImageOk) {
+      pet.style.display = '';
+    }
   }
+
+  let petDoneOk = true;
+  petDone.addEventListener('error', () => {
+    petDoneOk = false;
+    updatePetState();
+  });
 
   // 画像（pet.webp）が同じフォルダに無くても、タイマーはそのまま使える。
   function showPetFallback() {
@@ -546,6 +597,8 @@
     const roundsTotal = cfg?.rounds ?? Number(inputs.rounds.value);
     cycleEl.textContent = `${cycle} / ${cyclesTotal}`;
     roundEl.textContent = `${round} / ${roundsTotal}`;
+    const totalRemainText = formatClock(totalRemainingSeconds());
+    if (totalRemainEl.textContent !== totalRemainText) totalRemainEl.textContent = totalRemainText;
 
     const elapsedRatio = duration > 0
       ? Math.min(1, Math.max(0, (duration - remaining) / duration))
@@ -761,7 +814,10 @@
   resetBtn.addEventListener('click', reset);
   Object.values(inputs).forEach(input => {
     input.addEventListener('change', reset);
-    input.addEventListener('input', updateTotal);
+    input.addEventListener('input', () => {
+      updateTotal();
+      if (phase === 'idle') update();
+    });
   });
   document.addEventListener('visibilitychange', () => {
     // 画面に戻ったら、解除されたスリープ防止を取り直し、表示をすぐ更新する。
