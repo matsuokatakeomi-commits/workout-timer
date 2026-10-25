@@ -147,6 +147,19 @@
       opacity: .45;
       cursor: default;
     }
+    .total {
+      margin: -4px 0 18px;
+      text-align: center;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--muted);
+    }
+    .total b {
+      margin-left: 6px;
+      font-size: 24px;
+      font-variant-numeric: tabular-nums;
+      color: var(--text);
+    }
     .summary {
       text-align: center;
       color: var(--muted);
@@ -230,6 +243,8 @@
       </label>
     </section>
 
+    <p class="total">トータル<b id="totalTime">7分55秒</b></p>
+
     <section class="timer">
       <div id="phase" class="phase" aria-live="polite">開始前</div>
       <div class="petStage">
@@ -287,6 +302,7 @@
   const progressEl = $('progress');
   const countdownHint = $('countdownHint');
   const messageEl = $('message');
+  const totalTimeEl = $('totalTime');
   const startBtn = $('startBtn');
   const pauseBtn = $('pauseBtn');
   const resetBtn = $('resetBtn');
@@ -304,21 +320,46 @@
   let lastCountdownSecond = null;
   let wakeLock = null;
 
-  function clampNumber(input, min, max) {
-    const n = Math.floor(Number(input.value));
-    const v = Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : min;
-    input.value = v;
-    return v;
+  const LIMITS = {
+    prep: [0, 600],
+    work: [1, 3600],
+    rounds: [1, 999],
+    rest: [0, 3600],
+    cycles: [1, 99]
+  };
+
+  function clampValue(value, min, max) {
+    const n = Math.floor(Number(value));
+    return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : min;
   }
 
-  function readConfig() {
-    return {
-      prep: clampNumber(inputs.prep, 0, 600),
-      work: clampNumber(inputs.work, 1, 3600),
-      rounds: clampNumber(inputs.rounds, 1, 999),
-      rest: clampNumber(inputs.rest, 0, 3600),
-      cycles: clampNumber(inputs.cycles, 1, 99)
-    };
+  // writeBack が true のときは、範囲内に直した値を入力欄にも書き戻す。
+  function readConfig(writeBack = true) {
+    const c = {};
+    Object.entries(LIMITS).forEach(([key, [min, max]]) => {
+      c[key] = clampValue(inputs[key].value, min, max);
+      if (writeBack) inputs[key].value = c[key];
+    });
+    return c;
+  }
+
+  // 準備 + 運動 × ラウンド × サイクル + 休憩 ×（サイクル − 1）
+  // 休憩は最後のサイクルの後には入らない。
+  function totalSeconds(c) {
+    return c.prep + c.work * c.rounds * c.cycles + c.rest * (c.cycles - 1);
+  }
+
+  function formatDuration(sec) {
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor(sec % 3600 / 60);
+    const s = sec % 60;
+    if (h > 0) return `${h}時間${m}分${s}秒`;
+    if (m > 0) return `${m}分${s}秒`;
+    return `${s}秒`;
+  }
+
+  function updateTotal() {
+    totalTimeEl.textContent = formatDuration(totalSeconds(readConfig(false)));
   }
 
   function setInputsDisabled(disabled) {
@@ -711,13 +752,17 @@
     messageEl.textContent =
       `設定：準備${cfg.prep}秒 → 運動${cfg.work}秒 × ${cfg.rounds}ラウンド → 休憩${cfg.rest}秒 × ${cfg.cycles}サイクル`;
 
+    updateTotal();
     update();
   }
 
   startBtn.addEventListener('click', start);
   pauseBtn.addEventListener('click', pause);
   resetBtn.addEventListener('click', reset);
-  Object.values(inputs).forEach(input => input.addEventListener('change', reset));
+  Object.values(inputs).forEach(input => {
+    input.addEventListener('change', reset);
+    input.addEventListener('input', updateTotal);
+  });
   document.addEventListener('visibilitychange', () => {
     // 画面に戻ったら、解除されたスリープ防止を取り直し、表示をすぐ更新する。
     if (document.visibilityState === 'visible' && running) {
