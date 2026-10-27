@@ -42,14 +42,9 @@
       margin: 0 auto;
       padding: 28px 18px 40px;
     }
-    h1 {
-      margin: 0 0 18px;
-      font-size: 28px;
-      line-height: 1.2;
-    }
     .settings {
       display: grid;
-      grid-template-columns: repeat(5, minmax(0,1fr));
+      grid-template-columns: repeat(6, minmax(0,1fr));
       gap: 12px;
       margin-bottom: 18px;
     }
@@ -148,16 +143,17 @@
       cursor: default;
     }
     .total {
-      margin: -4px 0 18px;
-      text-align: center;
-      font-size: 15px;
+      font-size: 13px;
       font-weight: 700;
       color: var(--muted);
     }
     .total b {
-      margin-left: 6px;
-      font-size: 24px;
+      display: block;
+      margin-top: 6px;
+      padding: 12px 0;
+      font-size: 18px;
       font-variant-numeric: tabular-nums;
+      white-space: nowrap;
       color: var(--text);
     }
     .summary {
@@ -166,12 +162,6 @@
       font-size: 14px;
       margin-top: 14px;
       line-height: 1.6;
-    }
-    .note {
-      margin-top: 14px;
-      font-size: 12px;
-      color: var(--muted);
-      text-align: center;
     }
     .petStage {
       height: 170px;
@@ -222,15 +212,12 @@
       }
     }
     @media (max-width: 720px) {
-      .settings { grid-template-columns: repeat(2, minmax(0,1fr)); }
-      .settings label:last-child { grid-column: span 2; }
+      .settings { grid-template-columns: repeat(3, minmax(0,1fr)); }
     }
   </style>
 </head>
 <body>
   <main class="wrap">
-    <h1>Workout Timer</h1>
-
     <section class="settings" aria-label="ワークアウト設定">
       <label>準備（秒）
         <input id="prepInput" type="number" min="0" max="600" value="5">
@@ -247,9 +234,8 @@
       <label>サイクル数
         <input id="cycleInput" type="number" min="1" max="99" value="5">
       </label>
+      <div class="total">トータル<b id="totalTime">7分55秒</b></div>
     </section>
-
-    <p class="total">トータル<b id="totalTime">7分55秒</b></p>
 
     <section class="timer">
       <div id="phase" class="phase" aria-live="polite">開始前</div>
@@ -280,12 +266,7 @@
       <button id="resetBtn" type="button">↻ リセット</button>
     </div>
 
-    <p id="message" class="summary">
-      準備5秒 → 運動7秒 × 10ラウンド → 休憩30秒 × 5サイクル
-    </p>
-    <p class="note">
-      残り3・2・1秒で「ピッ」、ラウンド終了で「ポーン」、サイクル終了で「ピー」、全完了で「ピピー」。音を出すため、開始時に一度ボタンを押してください。
-    </p>
+    <p id="message" class="summary"></p>
   </main>
 
 <script>
@@ -723,7 +704,7 @@
     startBtn.textContent = '実行中';
     startBtn.disabled = true;
     pauseBtn.disabled = false;
-    messageEl.textContent = '残り3・2・1秒で短音、ラウンド終了でポーン、サイクル終了で長音が鳴ります。';
+    messageEl.textContent = '';
 
     if (cfg.prep > 0) {
       setPhase('prep', cfg.prep);
@@ -802,8 +783,7 @@
     pauseBtn.textContent = '⏸ 一時停止';
     countdownHint.textContent = '';
 
-    messageEl.textContent =
-      `設定：準備${cfg.prep}秒 → 運動${cfg.work}秒 × ${cfg.rounds}ラウンド → 休憩${cfg.rest}秒 × ${cfg.cycles}サイクル`;
+    messageEl.textContent = '';
 
     updateTotal();
     update();
