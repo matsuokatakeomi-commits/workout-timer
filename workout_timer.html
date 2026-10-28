@@ -122,11 +122,12 @@
       margin-top: 18px;
     }
     button {
-      min-width: 140px;
-      min-height: 48px;
-      padding: 11px 18px;
-      font-size: 16px;
-      font-weight: 800;
+      width: 72px;
+      height: 52px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       border-radius: 12px;
       border: 1px solid var(--border);
       background: var(--panel);
@@ -137,6 +138,12 @@
       background: var(--accent);
       border-color: var(--accent);
       color: var(--accentText);
+    }
+    button svg {
+      width: 26px;
+      height: 26px;
+      fill: currentColor;
+      pointer-events: none;
     }
     button:disabled {
       opacity: .45;
@@ -155,13 +162,6 @@
       font-variant-numeric: tabular-nums;
       white-space: nowrap;
       color: var(--text);
-    }
-    .summary {
-      text-align: center;
-      color: var(--muted);
-      font-size: 14px;
-      margin-top: 14px;
-      line-height: 1.6;
     }
     .petStage {
       height: 170px;
@@ -261,12 +261,10 @@
     </section>
 
     <div class="buttons">
-      <button id="startBtn" class="primary" type="button">▶ 開始</button>
-      <button id="pauseBtn" type="button" disabled>⏸ 一時停止</button>
-      <button id="resetBtn" type="button">↻ リセット</button>
+      <button id="startBtn" class="primary" type="button" aria-label="開始" title="開始"></button>
+      <button id="pauseBtn" type="button" aria-label="一時停止" title="一時停止" disabled></button>
+      <button id="resetBtn" type="button" aria-label="リセット" title="リセット"></button>
     </div>
-
-    <p id="message" class="summary"></p>
   </main>
 
 <script>
@@ -292,7 +290,20 @@
   const totalRemainEl = $('totalRemain');
   const progressEl = $('progress');
   const countdownHint = $('countdownHint');
-  const messageEl = $('message');
+  const ICONS = {
+    play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>',
+    pause: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>',
+    reset: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z"/></svg>'
+  };
+  // 押している最中に中身を差し替えるとクリックが失われるため、変化があるときだけ書き換える。
+  function setButton(btn, icon, label) {
+    if (btn.dataset.icon !== icon) {
+      btn.innerHTML = ICONS[icon];
+      btn.dataset.icon = icon;
+    }
+    btn.setAttribute('aria-label', label);
+    btn.title = label;
+  }
   const totalTimeEl = $('totalTime');
   const startBtn = $('startBtn');
   const pauseBtn = $('pauseBtn');
@@ -701,11 +712,8 @@
 
     running = true;
     requestWakeLock();
-    startBtn.textContent = '実行中';
     startBtn.disabled = true;
     pauseBtn.disabled = false;
-    messageEl.textContent = '';
-
     if (cfg.prep > 0) {
       setPhase('prep', cfg.prep);
     } else {
@@ -722,9 +730,7 @@
       clearInterval(timer);
       releaseWakeLock();
 
-      pauseBtn.textContent = '▶ 再開';
-      startBtn.textContent = '一時停止中';
-      messageEl.textContent = '一時停止中';
+      setButton(pauseBtn, 'play', '再開');
       update();
       return;
     }
@@ -734,9 +740,7 @@
       requestWakeLock();
       endAt = performance.now() + remaining * 1000;
 
-      pauseBtn.textContent = '⏸ 一時停止';
-      startBtn.textContent = '実行中';
-      messageEl.textContent = '再開しました。';
+      setButton(pauseBtn, 'pause', '一時停止');
       startInterval();
     }
   }
@@ -756,11 +760,10 @@
     progressEl.style.backgroundColor = '#22c55e';
 
     startBtn.disabled = false;
-    startBtn.textContent = 'もう一度';
+    setButton(startBtn, 'play', 'もう一度');
     pauseBtn.disabled = true;
-    pauseBtn.textContent = '⏸ 一時停止';
+    setButton(pauseBtn, 'pause', '一時停止');
     setInputsDisabled(false);
-    messageEl.textContent = '全サイクル完了です。';
   }
 
   function reset() {
@@ -778,12 +781,10 @@
 
     setInputsDisabled(false);
     startBtn.disabled = false;
-    startBtn.textContent = '▶ 開始';
+    setButton(startBtn, 'play', '開始');
     pauseBtn.disabled = true;
-    pauseBtn.textContent = '⏸ 一時停止';
+    setButton(pauseBtn, 'pause', '一時停止');
     countdownHint.textContent = '';
-
-    messageEl.textContent = '';
 
     updateTotal();
     update();
@@ -807,6 +808,7 @@
     }
   });
 
+  setButton(resetBtn, 'reset', 'リセット');
   reset();
 })();
 </script>
